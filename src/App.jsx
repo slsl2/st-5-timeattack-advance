@@ -1,7 +1,12 @@
+import QueryClientSetup from "../QueryClientSetup";
 import Router from "./shared/Router";
 
 function App() {
-  return <Router />;
+  return (
+    <QueryClientSetup>
+      <Router />
+    </QueryClientSetup>
+  );
 }
 
 export default App;
