@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { todoApi } from "../api/todos";
@@ -9,7 +9,6 @@ export default function TodoList() {
     data: todos,
     error,
     isPending,
-    refetch,
   } = useQuery({
     queryKey: ["todos"],
     queryFn: async () => {
@@ -19,24 +18,36 @@ export default function TodoList() {
   });
 
   // TODO: 아래 handleLike 로 구현되어 있는 부분을 useMutation 으로 리팩터링 해보세요. 모든 기능은 동일하게 동작해야 합니다.
+
+  const updateTodo = async ({ id, liked }) => {
+    await todoApi.patch(`/todos/${id}`, { liked });
+  };
+
   const queryClient = useQueryClient();
-  const handleLike = async (id, currentLiked) => {
-    const previousTodos = [...todos];
-    try {
-      queryClient.setQueryData(["todos"], (prev) =>
-        prev.map((todo) =>
-          todo.id === id ? { ...todo, liked: !todo.liked } : todo,
-        ),
+  const mutation = useMutation({
+    mutationFn: updateTodo,
+    onMutate: async (newTodo) => {
+      await queryClient.cancelQueries(["todos"]);
+
+      const previousTodos = queryClient.getQueryData(["todos"]);
+
+      queryClient.setQueryData(["todos"], (old) =>
+        old.map((todo) =>
+          todo.id === newTodo.id ? { ...todo, liked: newTodo.liked } : todo
+        )
       );
-      await todoApi.patch(`/todos/${id}`, {
-        liked: !currentLiked,
-      });
-    } catch (err) {
-      console.error(err);
-      queryClient.setQueryData(["todos"], previousTodos);
-    } finally {
-      refetch();
-    }
+      return { previousTodos };
+    },
+    onError: (err, newTodo, context) => {
+      queryClient.setQueryData(["todos"], context.previousTodos);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries(["todos"]);
+    },
+  });
+
+  const handleLike = (id, currentLiked) => {
+    mutation.mutate({ id, liked: !currentLiked });
   };
 
   if (isPending) {
